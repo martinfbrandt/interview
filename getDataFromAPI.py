@@ -13,8 +13,8 @@ class GetData:
 		db=self.ConnectToMongo()
 
 
-		self.GetTwitterData(alchemyapi,db)
-		#self.GetStackOverflowData(alchemyapi,db)
+		#self.GetTwitterData(alchemyapi,db)
+		self.GetStackOverflowData(alchemyapi,db)
 		
 
 	def GetTwitterAuthorization(self):
@@ -38,6 +38,7 @@ class GetData:
 	def GetTwitterData(self,alchemyapi,db):
 		listofIDs=[]
 		tweetStore=db.tweets
+		result=tweetStore.remove()
 		bearer_tok=self.GetTwitterAuthorization()
 		if bearer_tok != False:
 			
@@ -69,7 +70,7 @@ class GetData:
 				for status in  responses['statuses']:
 					if status['id'] not in listofIDs:
 						#craete tweet object
-						stat=status['text']
+						stat=status['text'].encode('utf-8')
 						if stat[:3]!= 'RT ':
 							comboresponse=alchemyapi.combined('text', stat)
 							relationResponse=alchemyapi.relations('text',stat)
@@ -79,9 +80,7 @@ class GetData:
 							tweet['relations']=relationResponse['relations']
 							tweets.append(tweet)
 				result=tweetStore.insert_many(tweets)
-				tweetStore.aggregate([
-
-					{$match(
+			# tweetStore.distinct('keywords.text')
 				
 	def ConnectToMongo(self):
 		client = MongoClient('mongodb://martin:mfbmfb@ds033123.mongolab.com:33123/twitstackdata')
@@ -90,6 +89,9 @@ class GetData:
 
 	def GetStackOverflowData(self,alchemyapi,db):
 		allQuestions=[]
+		
+		stackStore=db.stackOs
+		result=stackStore.remove()
 		page=1
 		alchemyapi = AlchemyAPI()
 		while(True):
@@ -101,19 +103,28 @@ class GetData:
 				page=page+1
 			else: break
 			text=''
-			
+			posts=[]
 			for item in response['items']:
-				print item['tags'],item['title'],item['link']
-				res3=alchemyapi.text('html',item['body'])
-				res4= alchemyapi.combined('text',item['title']+'\n'+res3['text'])
+				try:
+					postText=alchemyapi.text('html',item['body'])
+					postText=postText['text'].encode('utf-8')
+				except: postText=''
 				
-				print res3['text'],json.dumps(res4,indent=4)			
-
+				
+				post = alchemyapi.combined('text',item['title']+'\n'+postText)
+				postRelation=alchemyapi.relations('text',item['title'])	
+				
+				post['text']=postText
+				post['relations']=postRelation['relations']
+				post['id']=item['question_id']	
+				posts.append(post)
+			stackStore.insert_many(posts)
 	def printResponse(self,res2):
 		for relation in self.res2['relations']:
 			if relation['subject']['text']=='I':
 				try: print relation['action']['text'],' ',relation['object']['text']
 				except:continue
+				
 
 	
 
